@@ -3,15 +3,18 @@
 #include "SaveApi.h"
 #include  <algorithm>// for std::find
 #include <thread>	 // for sleep
+#include <chrono>
 
 #define TAB1 "  "
 #define TAB2 "    "
 #define TAB3 "      "
 #define ERASE_LINE "                            "
 
-#define EXPOSURE_TIME 20000.0
-#define PTPSYNC_FRAME_RATE 10
-#define HEIGHT 640
+#define EXPOSURE_TIME 2000.0
+#define PTPSYNC_FRAME_RATE 20
+#define HEIGHT 2048
+#define BINTYPE "Sum"
+#define BINNUM 1
 
 // =-=-=-=-=-=-=-=-=-
 // =-=- SETTINGS =-=-
@@ -22,14 +25,14 @@
 //    the end of the timeout, an exception is thrown. The timeout is the maximum
 //    time to wait for an image; however, getting an image will return as soon as
 //    an image is available, not waiting the full extent of the timeout.
-#define TIMEOUT 20000
+#define TIMEOUT 200000
 
 // number of images to grab
-#define NUM_IMAGES 25000
+#define NUM_IMAGES 30000
 
-#define PACKET_DELAY 48000
-#define TRANS_DELAY 16000
-#define PIXEL_FORMAT "Mono8"
+#define PACKET_DELAY 0
+#define TRANS_DELAY 8000
+#define PIXEL_FORMAT "BayerRG8"
 
 
 // =-=-=-=-=-=-=-=-=-
@@ -40,12 +43,17 @@
 
 void SaveImage(Arena::IImage* pImage, const char* filename)
 {
+	// Arena::EBayerAlgorithm bayerAlgorithm = DirectionalInterpolation;
 	// auto pConverted = Arena::ImageFactory::Convert(
 	// 	pImage,
-	// 	PIXEL_FORMAT);
+	// 	RGB8, 
+	// 	Arena::DirectionalInterpolation);
 
 	// prepare image parameters
 	std::cout << TAB1 << "Prepare image parameters\n";
+	std::cout << TAB1 << "Width: " << pImage->GetWidth() << std::endl;
+	std::cout << TAB1 << "GetHeight: " << pImage->GetHeight() << std::endl;
+	std::cout << TAB1 << "GetBitsPerPixel: " << pImage->GetBitsPerPixel() << std::endl;
 
 	Save::ImageParams params(
 		pImage->GetWidth(),
@@ -96,6 +104,8 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
 			"ExposureAuto",
 			"Off");
 
+		// std::cout << TAB3 << "Hello";
+
 		Arena::SetNodeValue<double>(
 			pDevice->GetNodeMap(),
 			"ExposureTime",
@@ -143,7 +153,7 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
 		
 		// Set pixel format to Mono8
 		Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "PixelFormat", PIXEL_FORMAT);
-		std::cout << TAB3 << "Set pixel format to 'Mono8' \n";
+		std::cout << TAB3 << "Set pixel format to: " << Arena::GetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "PixelFormat") << std::endl;
 		
 		if (i == 0)
 		{
@@ -205,6 +215,26 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
 			std::cout << Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "GevSCFTD") << "\n";
 		}
 
+		// Image Height
+		
+		// std::cout << "hi" << std::endl;
+		// gain
+		GenApi::CFloatPtr gain = pDevice->GetNodeMap()->GetNode("Gain");
+		// std::cout << "woah" << std::endl;
+		gain->SetValue(13);
+		// std::cout << "wow!" << std::endl;
+
+		// Binning
+		GenApi::CIntegerPtr vbin = pDevice->GetNodeMap()->GetNode("BinningVertical");
+		GenApi::CIntegerPtr hbin = pDevice->GetNodeMap()->GetNode("BinningHorizontal");
+		vbin->SetValue(BINNUM);
+		hbin->SetValue(BINNUM);
+
+		Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "BinningVerticalMode", BINTYPE);
+		Arena::SetNodeValue<GenICam::gcstring>(pDevice->GetNodeMap(), "BinningHorizontalMode", BINTYPE);
+		
+		GenApi::CIntegerPtr height = pDevice->GetNodeMap()->GetNode("Height");
+		height->SetValue(HEIGHT / BINNUM);
 		// Frame rate
 		GenApi::CFloatPtr pAcquisitionFrameRate = pDevice->GetNodeMap()->GetNode("AcquisitionFrameRate");
 		pAcquisitionFrameRate->SetValue(pAcquisitionFrameRate->GetMax());
@@ -214,11 +244,9 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
 		GenApi::CFloatPtr pPTPSyncFrameRate = pDevice->GetNodeMap()->GetNode("PTPSyncFrameRate");
 		pPTPSyncFrameRate->SetValue(PTPSYNC_FRAME_RATE);
 
-		// Image Height
-		GenApi::CIntegerPtr height = pDevice->GetNodeMap()->GetNode("Height");
-		height->SetValue(HEIGHT);
+		std::cout << "stream channel packet size: " << Arena::GetNodeValue<int64_t>(pDevice->GetNodeMap(), "DeviceStreamChannelPacketSize") << std::endl;
 
-
+		
 		
 	}
 
@@ -300,6 +328,7 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
 
 	// get images and check timestamps
 	std::cout << TAB1 << "Get images\n";
+	auto start = std::chrono::high_resolution_clock::now();
 
 	for (size_t i = 0; i < NUM_IMAGES; i++)
 	{
@@ -322,15 +351,24 @@ void PTPSyncCamerasAndAcquireImages(Arena::ISystem* pSystem, std::vector<Arena::
             // std::cout << TAB3 << "buffersize: " << pBuffer->HasImageData()<< std::endl;
 			std::cout << pImage->GetTimestamp() << "\n";
             // char* filename = pImage->GetTimestamp();
+			std::string camnum = deviceSerialNumber.c_str();
 			
-			std::string fname = "/home/jay/data/" + std::to_string(pImage->GetTimestamp());
-
+			std::string fname = "/media/external/" + camnum + "/" + std::to_string(i);
+			std::cout << "saving to: " << fname << std::endl;
             SaveImage(pImage, fname.c_str());
 
 			// requeue buffer
 			pDevice->RequeueBuffer(pImage);
 		}
 	}
+	auto stop = std::chrono::high_resolution_clock::now();
+
+	auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+
+
+	std::cout << "time to capture: " <<  duration.count()/1000000  << std::endl;
+	std::cout << "average frame rate: " << 1000000 * NUM_IMAGES/(duration.count())  << std::endl;
+	
 	
 	// stop stream
 	std::cout << TAB1 << "Stop stream\n";
@@ -358,9 +396,18 @@ int main()
 	try
 	{
 		// prepare example
+		std::cout << "Preparing\n";
 		Arena::ISystem* pSystem = Arena::OpenSystem();
 		pSystem->UpdateDevices(100);
 		std::vector<Arena::DeviceInfo> deviceInfos = pSystem->GetDevices();
+		std::cout << "Got Devices: " << deviceInfos.size()<< "\n";
+		for (size_t i = 0; i < deviceInfos.size(); i++){
+			std::cout << "Got Devices: " << deviceInfos[i].IpAddressStr()<< "\n";	
+			if (deviceInfos[i].IpAddressStr() == "169.254.1.1"){
+				std::cout << "Removing bad device\n";
+				deviceInfos.pop_back();
+			}
+		}
 		if (deviceInfos.size() < 2)
 		{
 			if (deviceInfos.size() == 0)
