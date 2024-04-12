@@ -9,25 +9,18 @@ RUN apt-get update && apt-get install -y \
     libudev-dev \
     libgtk-3-dev \
     tmux \
-    vim 
+    vim \
+    net-tools
 
 RUN mkdir -p /lucidlogging
-RUN mkdir -p /lucidlogging/ArenaSDK
-
 
 COPY . /lucidlogging/
-# COPY src /lucidlogging/
-# COPY
-# COPY libraries/ArenaSDK_v0.1.49_Linux_ARM64.tar.gz lucidlogging/ArenaSDK_v0.1.49_Linux_ARM64.tar.gz
 
-RUN tar -xvzf ./lucidlogging/libraries/ArenaSDK_v0.1.49_Linux_ARM64.tar.gz -C ./lucidlogging/ArenaSDK
-
-# RUN rm -rf /lucidlogging/libraries
-# RUN sh ./lucidlogging/ArenaSDK/ArenaSDK_Linux_ARM64/ArenaSDK_Linux_ARM64.conf
+RUN tar -xvzf ./lucidlogging/libraries/ArenaSDK_v0.1.49_Linux_ARM64.tar.gz -C ./lucidlogging
 
 WORKDIR /lucidlogging
 
-RUN cd ./ArenaSDK/ArenaSDK_Linux_ARM64 && sh Arena_SDK_ARM64.conf && cd ../..
+RUN cd ./ArenaSDK_Linux_ARM64 && sh Arena_SDK_ARM64.conf && cd ..
 
 
 RUN chmod +x tmux_runner.sh

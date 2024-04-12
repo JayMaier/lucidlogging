@@ -1,0 +1,12 @@
+version: "3.2"
+services:
+  development:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # volumes:
+    #   - .:/app
+
+    network_mode: host
+    command:
+      ["/bin/bash", "tmux_runner.sh"]
