@@ -41,7 +41,13 @@ This command runs the Docker container on the same network as the host and mount
 
 To compile changes to the code, use the following command:
 
+Try 
 
+```bash
+make
+```
+
+if this doesn't work, then try
 ```bash
 make jaytesting
 ```
